@@ -47,6 +47,7 @@ if __name__ == "__main__":
         train_dataset,
         batch_size=4,
         shuffle=True,
+        num_workers=12,
     )
 
     le_net = LeNet(classes=len(labels))
@@ -55,7 +56,7 @@ if __name__ == "__main__":
     criterion = CrossEntropyLoss()
     optimizer = optim.SGD(le_net.parameters(), lr=0.001, momentum=0.9)
 
-    for epoch in range(2):  # loop over the dataset multiple times
+    for epoch in range(4):  # loop over the dataset multiple times
 
         running_loss = 0.0
         for i, data in enumerate(train_loader, 0):
