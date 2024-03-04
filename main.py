@@ -23,7 +23,7 @@ def get_labels(dataset):
 def transform(examples):
     transformer = Compose(
         [
-            transforms.Resize((250, 250)),
+            transforms.Resize((28, 28)),
             transforms.ToTensor(),
             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
         ]
