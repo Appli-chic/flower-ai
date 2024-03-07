@@ -3,18 +3,37 @@ from datasets import load_dataset
 
 from le_net import LeNet
 from main import get_labels, transform
+from torch.utils.data import DataLoader
 
 dataset = load_dataset("DeadPixels/DPhi_Sprint_25_Flowers")
 test_dataset = dataset['test']
 test_dataset.set_transform(transform)
+test_loader = DataLoader(
+    test_dataset,
+    batch_size=4,
+    shuffle=True,
+    num_workers=12,
+)
 
 model = LeNet(len(get_labels(test_dataset)))
 flower_ai = torch.load('./flower_ai.pth')
 model.load_state_dict(flower_ai)
 
-with torch.no_grad():
+with (torch.no_grad()):
     model.eval()
 
-    # Get the first image from the dataset
-    prediction = model(test_dataset[0]['image'])
-    print(prediction)
+    correct = 0
+    total = 0
+
+    for data in test_loader:
+        image = data['image']
+        labels = data['label']
+
+        outputs = model(image)
+
+        _, predicted = torch.max(outputs.data, 1)
+        total += labels.size(0)
+        correct += (predicted == labels).sum().item()
+
+    print(f'Accuracy on test images: {100 * correct // total} %')
+
