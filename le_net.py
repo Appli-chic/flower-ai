@@ -22,7 +22,7 @@ class LeNet(Module):
         self.maxpool2 = MaxPool2d(kernel_size=(2, 2), stride=(2, 2))
 
         # Initialize the fully connected layers
-        self.fc1 = Linear(in_features=800, out_features=500)
+        self.fc1 = Linear(in_features=252050, out_features=500)
         self.relu3 = ReLU()
 
         # initialize softmax classifier

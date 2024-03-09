@@ -5,6 +5,9 @@ from le_net import LeNet
 from main import get_labels, transform
 from torch.utils.data import DataLoader
 
+# Set GPU
+device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
 dataset = load_dataset("DeadPixels/DPhi_Sprint_25_Flowers")
 test_dataset = dataset['test']
 test_dataset.set_transform(transform)
@@ -18,6 +21,7 @@ test_loader = DataLoader(
 model = LeNet(len(get_labels(test_dataset)))
 flower_ai = torch.load('./flower_ai.pth')
 model.load_state_dict(flower_ai)
+model.to(device)
 
 with (torch.no_grad()):
     model.eval()
@@ -26,10 +30,10 @@ with (torch.no_grad()):
     total = 0
 
     for data in test_loader:
-        image = data['image']
-        labels = data['label']
+        images = data['image'].to(device)
+        labels = data['label'].to(device)
 
-        outputs = model(image)
+        outputs = model(images)
 
         _, predicted = torch.max(outputs.data, 1)
         total += labels.size(0)

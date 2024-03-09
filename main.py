@@ -1,10 +1,12 @@
 import torch
 import torch.optim as optim
 from datasets import load_dataset
+from torch import no_grad
 from torch.nn import CrossEntropyLoss
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
 from torchvision import transforms
-from torchvision.transforms import Compose
+from torchvision.transforms import Compose, RandomHorizontalFlip, RandomRotation
 from torch.utils.mobile_optimizer import optimize_for_mobile
 
 from le_net import LeNet
@@ -23,7 +25,9 @@ def get_labels(dataset):
 def transform(examples):
     transformer = Compose(
         [
-            transforms.Resize((28, 28)),
+            transforms.Resize((299, 299)),
+            RandomHorizontalFlip(),
+            RandomRotation(10),
             transforms.ToTensor(),
             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
         ]
@@ -33,6 +37,9 @@ def transform(examples):
 
 
 if __name__ == "__main__":
+    # Set GPU
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
     # Load data set
     dataset = load_dataset("DeadPixels/DPhi_Sprint_25_Flowers")
 
@@ -40,6 +47,7 @@ if __name__ == "__main__":
     # dataset.cleanup_cache_files()
 
     train_dataset = dataset['train']
+    validation_dataset = dataset['validation']
     labels = get_labels(train_dataset)
 
     train_dataset.set_transform(transform)
@@ -50,26 +58,44 @@ if __name__ == "__main__":
         num_workers=12,
     )
 
+    validation_dataset.set_transform(transform)
+    validation_loader = DataLoader(
+        validation_dataset,
+        batch_size=4,
+        shuffle=True,
+        num_workers=12,
+    )
+
     le_net = LeNet(classes=len(labels))
+    le_net.to(device)
 
     # Optimizer
     criterion = CrossEntropyLoss()
     optimizer = optim.SGD(le_net.parameters(), lr=0.001, momentum=0.9)
 
-    for epoch in range(4):  # loop over the dataset multiple times
+    # Scheduler for learning rate reduction
+    scheduler = ReduceLROnPlateau(optimizer, 'min')
+
+    # Early stopping initialization
+    min_val_loss = float('inf')
+    patience = 10
+    patience_counter = 0
+
+    # loop over the dataset multiple times
+    for epoch in range(100):
 
         running_loss = 0.0
         for i, data in enumerate(train_loader, 0):
             # get the inputs; data is a list of [inputs, labels]
-            inputs = data['image']
-            label = data['label']
+            inputs = data['image'].to(device)
+            labels = data['label'].to(device)
 
             # zero the parameter gradients
             optimizer.zero_grad()
 
             # forward + backward + optimize
             outputs = le_net(inputs)
-            loss = criterion(outputs, label)
+            loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
 
@@ -79,5 +105,45 @@ if __name__ == "__main__":
                 print(f'[{epoch + 1}, {i + 1:5d}] loss: {running_loss / 99:.3f}')
                 running_loss = 0.0
 
-    torch.save(le_net.state_dict(), './flower_ai.pth')
+        # Validation loss
+        val_loss = 0.0
+        correct = 0
+        total = 0
+        with no_grad():
+            for data in validation_loader:
+                images = data['image'].to(device)
+                labels = data['label'].to(device)
+                outputs = le_net(images)
+                loss = criterion(outputs, labels)
+                val_loss += loss.item()
+                _, predicted = torch.max(outputs.data, 1)
+                total += labels.size(0)
+                correct += (predicted == labels).sum().item()
+
+        val_loss = val_loss / len(validation_loader)
+        accuracy = 100 * correct / total
+        print(f'Validation loss: {val_loss:.3f}, Accuracy: {accuracy:.2f}%')
+
+        # Check for early stopping
+        if val_loss < min_val_loss:
+            min_val_loss = val_loss
+            patience_counter = 0
+            torch.save(le_net.state_dict(), './flower_ai.pth')
+        else:
+            patience_counter += 1
+            if patience_counter >= patience:
+                print('Early stopping')
+                torch.save(le_net.state_dict(), './flower_ai.pth')
+                break
+
+        # Adjust learning rate
+        scheduler.step(val_loss)
+
     print('Finished Training')
+
+    # Optimize for mobile
+    # model = LeNet(classes=len(labels))
+    # flower_ai = torch.load('./flower_ai.pth')
+    # model.load_state_dict(flower_ai)
+    optimized_model = optimize_for_mobile(le_net.state_dict())
+    torch.jit.save(optimized_model, './flower_ai_optimized.pth')
