@@ -67,19 +67,9 @@ if __name__ == "__main__":
     le_net = LeNet(classes=len(labels))
     le_net.to(device)
 
-    # Specify quantization configuration
-    qconfig = torch.quantization.QConfig(
-        activation=torch.quantization.MinMaxObserver.with_args(dtype=torch.qint8, qscheme=torch.per_tensor_affine),
-        weight=torch.quantization.default_observer.with_args(dtype=torch.qint8)
-    )
-    le_net.qconfig = qconfig
-
-    # Prepare the model for quantization
-    le_net_prepared = torch.quantization.prepare(le_net)
-
     # Optimizer
     criterion = CrossEntropyLoss()
-    optimizer = optim.SGD(le_net_prepared.parameters(), lr=0.001, momentum=0.9)
+    optimizer = optim.SGD(le_net.parameters(), lr=0.001, momentum=0.9)
 
     # Scheduler for learning rate reduction
     scheduler = ReduceLROnPlateau(optimizer, 'min')
@@ -90,7 +80,7 @@ if __name__ == "__main__":
     patience_counter = 0
 
     # loop over the dataset multiple times
-    for epoch in range(1):
+    for epoch in range(1000):
 
         running_loss = 0.0
         for i, data in enumerate(train_loader, 0):
@@ -102,7 +92,7 @@ if __name__ == "__main__":
             optimizer.zero_grad()
 
             # forward + backward + optimize
-            outputs = le_net_prepared(inputs)
+            outputs = le_net(inputs)
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
@@ -121,7 +111,7 @@ if __name__ == "__main__":
             for data in validation_loader:
                 images = data['image'].to(device)
                 labels = data['label'].to(device)
-                outputs = le_net_prepared(images)
+                outputs = le_net(images)
                 loss = criterion(outputs, labels)
                 val_loss += loss.item()
                 _, predicted = torch.max(outputs.data, 1)
@@ -149,15 +139,13 @@ if __name__ == "__main__":
     print('Finished Training')
 
     # Convert to quantized model
-    le_net_quantized = torch.quantization.convert(le_net_prepared)
+    le_net_quantized = torch.quantization.convert(le_net)
 
     # Save the model
     torch.save(le_net_quantized.state_dict(), './flower_ai.pth')
 
     # Optimize for mobile
-    cpu_device = torch.device('cpu')
-    le_net_prepared.to(cpu_device)
-    le_net_quantized = torch.quantization.convert(le_net_prepared)
+    le_net_quantized = torch.quantization.convert(le_net)
     scripted_model = torch.jit.script(le_net_quantized)
     optimized_model = torch.utils.mobile_optimizer.optimize_for_mobile(scripted_model)
     torch.jit.save(optimized_model, './flower_ai_optimized.pth')
