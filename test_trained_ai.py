@@ -13,7 +13,7 @@ test_dataset = dataset['test']
 test_dataset.set_transform(transform)
 test_loader = DataLoader(
     test_dataset,
-    batch_size=4,
+    batch_size=3,
     shuffle=True,
     num_workers=12,
 )

@@ -9,6 +9,7 @@ from torchvision import transforms
 from torchvision.transforms import Compose, RandomHorizontalFlip, RandomRotation
 from torch.utils.mobile_optimizer import optimize_for_mobile
 
+
 from le_net import LeNet
 
 
@@ -43,9 +44,6 @@ if __name__ == "__main__":
     # Load data set
     dataset = load_dataset("DeadPixels/DPhi_Sprint_25_Flowers")
 
-    # Clean up the cache files
-    # dataset.cleanup_cache_files()
-
     train_dataset = dataset['train']
     validation_dataset = dataset['validation']
     labels = get_labels(train_dataset)
@@ -53,7 +51,7 @@ if __name__ == "__main__":
     train_dataset.set_transform(transform)
     train_loader = DataLoader(
         train_dataset,
-        batch_size=4,
+        batch_size=3,
         shuffle=True,
         num_workers=12,
     )
@@ -61,7 +59,7 @@ if __name__ == "__main__":
     validation_dataset.set_transform(transform)
     validation_loader = DataLoader(
         validation_dataset,
-        batch_size=4,
+        batch_size=3,
         shuffle=True,
         num_workers=12,
     )
@@ -69,9 +67,19 @@ if __name__ == "__main__":
     le_net = LeNet(classes=len(labels))
     le_net.to(device)
 
+    # Specify quantization configuration
+    qconfig = torch.quantization.QConfig(
+        activation=torch.quantization.MinMaxObserver.with_args(dtype=torch.qint8, qscheme=torch.per_tensor_affine),
+        weight=torch.quantization.default_observer.with_args(dtype=torch.qint8)
+    )
+    le_net.qconfig = qconfig
+
+    # Prepare the model for quantization
+    le_net_prepared = torch.quantization.prepare(le_net)
+
     # Optimizer
     criterion = CrossEntropyLoss()
-    optimizer = optim.SGD(le_net.parameters(), lr=0.001, momentum=0.9)
+    optimizer = optim.SGD(le_net_prepared.parameters(), lr=0.001, momentum=0.9)
 
     # Scheduler for learning rate reduction
     scheduler = ReduceLROnPlateau(optimizer, 'min')
@@ -82,7 +90,7 @@ if __name__ == "__main__":
     patience_counter = 0
 
     # loop over the dataset multiple times
-    for epoch in range(100):
+    for epoch in range(1):
 
         running_loss = 0.0
         for i, data in enumerate(train_loader, 0):
@@ -94,7 +102,7 @@ if __name__ == "__main__":
             optimizer.zero_grad()
 
             # forward + backward + optimize
-            outputs = le_net(inputs)
+            outputs = le_net_prepared(inputs)
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
@@ -113,7 +121,7 @@ if __name__ == "__main__":
             for data in validation_loader:
                 images = data['image'].to(device)
                 labels = data['label'].to(device)
-                outputs = le_net(images)
+                outputs = le_net_prepared(images)
                 loss = criterion(outputs, labels)
                 val_loss += loss.item()
                 _, predicted = torch.max(outputs.data, 1)
@@ -128,12 +136,11 @@ if __name__ == "__main__":
         if val_loss < min_val_loss:
             min_val_loss = val_loss
             patience_counter = 0
-            torch.save(le_net.state_dict(), './flower_ai.pth')
         else:
             patience_counter += 1
             if patience_counter >= patience:
                 print('Early stopping')
-                torch.save(le_net.state_dict(), './flower_ai.pth')
+
                 break
 
         # Adjust learning rate
@@ -141,9 +148,16 @@ if __name__ == "__main__":
 
     print('Finished Training')
 
+    # Convert to quantized model
+    le_net_quantized = torch.quantization.convert(le_net_prepared)
+
+    # Save the model
+    torch.save(le_net_quantized.state_dict(), './flower_ai.pth')
+
     # Optimize for mobile
-    # model = LeNet(classes=len(labels))
-    # flower_ai = torch.load('./flower_ai.pth')
-    # model.load_state_dict(flower_ai)
-    optimized_model = optimize_for_mobile(le_net.state_dict())
+    cpu_device = torch.device('cpu')
+    le_net_prepared.to(cpu_device)
+    le_net_quantized = torch.quantization.convert(le_net_prepared)
+    scripted_model = torch.jit.script(le_net_quantized)
+    optimized_model = torch.utils.mobile_optimizer.optimize_for_mobile(scripted_model)
     torch.jit.save(optimized_model, './flower_ai_optimized.pth')
