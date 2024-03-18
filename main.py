@@ -6,7 +6,7 @@ from torch.nn import CrossEntropyLoss
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
 from torchvision import transforms
-from torchvision.transforms import Compose, RandomHorizontalFlip, RandomRotation
+from torchvision.transforms import Compose, RandomHorizontalFlip, RandomRotation, RandomVerticalFlip
 from torch.utils.mobile_optimizer import optimize_for_mobile
 
 
@@ -26,11 +26,12 @@ def get_labels(dataset):
 def transform(examples):
     transformer = Compose(
         [
-            transforms.Resize((299, 299)),
+            transforms.Resize((224, 224)),
             RandomHorizontalFlip(),
+            RandomVerticalFlip(),
             RandomRotation(10),
             transforms.ToTensor(),
-            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ]
     )
     examples['image'] = [transformer(img) for img in examples['image']]
@@ -76,7 +77,7 @@ if __name__ == "__main__":
 
     # Early stopping initialization
     min_val_loss = float('inf')
-    patience = 10
+    patience = 50
     patience_counter = 0
 
     # loop over the dataset multiple times

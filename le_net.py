@@ -22,11 +22,11 @@ class LeNet(Module):
         self.maxpool2 = MaxPool2d(kernel_size=(2, 2), stride=(2, 2))
 
         # Initialize the fully connected layers
-        self.fc1 = Linear(in_features=252050, out_features=200)
+        self.fc1 = Linear(in_features=140450, out_features=30)
         self.relu3 = ReLU()
 
         # initialize softmax classifier
-        self.fc2 = Linear(in_features=200, out_features=classes)
+        self.fc2 = Linear(in_features=30, out_features=classes)
         self.logSoftmax = LogSoftmax(dim=1)
 
     def forward(self, input_tensor):
