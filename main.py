@@ -9,7 +9,6 @@ from torchvision import transforms
 from torchvision.transforms import Compose, RandomHorizontalFlip, RandomRotation, RandomVerticalFlip
 from torch.utils.mobile_optimizer import optimize_for_mobile
 
-
 from le_net import LeNet
 
 
@@ -23,10 +22,10 @@ def get_labels(dataset):
     return labels
 
 
-def transform(examples):
+def transform_image(entry):
     transformer = Compose(
         [
-            transforms.Resize((224, 224)),
+            transforms.Resize((192, 192)),
             RandomHorizontalFlip(),
             RandomVerticalFlip(),
             RandomRotation(10),
@@ -34,8 +33,8 @@ def transform(examples):
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ]
     )
-    examples['image'] = [transformer(img) for img in examples['image']]
-    return examples
+    entry['image'] = [transformer(img) for img in entry['image']]
+    return entry
 
 
 if __name__ == "__main__":
@@ -49,7 +48,7 @@ if __name__ == "__main__":
     validation_dataset = dataset['validation']
     labels = get_labels(train_dataset)
 
-    train_dataset.set_transform(transform)
+    train_dataset.set_transform(transform_image)
     train_loader = DataLoader(
         train_dataset,
         batch_size=3,
@@ -57,7 +56,7 @@ if __name__ == "__main__":
         num_workers=12,
     )
 
-    validation_dataset.set_transform(transform)
+    validation_dataset.set_transform(transform_image)
     validation_loader = DataLoader(
         validation_dataset,
         batch_size=3,
@@ -139,14 +138,10 @@ if __name__ == "__main__":
 
     print('Finished Training')
 
-    # Convert to quantized model
-    le_net_quantized = torch.quantization.convert(le_net)
-
     # Save the model
-    torch.save(le_net_quantized.state_dict(), './flower_ai.pth')
+    torch.save(le_net.state_dict(), './flower_ai.pth')
 
     # Optimize for mobile
-    le_net_quantized = torch.quantization.convert(le_net)
-    scripted_model = torch.jit.script(le_net_quantized)
+    scripted_model = torch.jit.script(le_net)
     optimized_model = torch.utils.mobile_optimizer.optimize_for_mobile(scripted_model)
     torch.jit.save(optimized_model, './flower_ai_optimized.pth')

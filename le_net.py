@@ -12,21 +12,21 @@ class LeNet(Module):
         super(LeNet, self).__init__()
 
         # Initialize the first layers of Convolutional, activation function and pooling
-        self.conv1 = Conv2d(in_channels=3, out_channels=20, kernel_size=(5, 5))
+        self.conv1 = Conv2d(in_channels=3, out_channels=25, kernel_size=(5, 5))
         self.relu1 = ReLU()
         self.maxpool1 = MaxPool2d(kernel_size=(2, 2), stride=(2, 2))
 
         # Initialize the seconds layers of Convolutional, activation function and pooling
-        self.conv2 = Conv2d(in_channels=20, out_channels=50, kernel_size=(5, 5))
+        self.conv2 = Conv2d(in_channels=25, out_channels=60, kernel_size=(5, 5))
         self.relu2 = ReLU()
         self.maxpool2 = MaxPool2d(kernel_size=(2, 2), stride=(2, 2))
 
         # Initialize the fully connected layers
-        self.fc1 = Linear(in_features=140450, out_features=30)
+        self.fc1 = Linear(in_features=121500, out_features=20)
         self.relu3 = ReLU()
 
         # initialize softmax classifier
-        self.fc2 = Linear(in_features=30, out_features=classes)
+        self.fc2 = Linear(in_features=20, out_features=classes)
         self.logSoftmax = LogSoftmax(dim=1)
 
     def forward(self, input_tensor):

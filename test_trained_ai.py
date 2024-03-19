@@ -2,7 +2,7 @@ import torch
 from datasets import load_dataset
 
 from le_net import LeNet
-from main import get_labels, transform
+from main import get_labels, transform_image
 from torch.utils.data import DataLoader
 
 # Set GPU
@@ -10,7 +10,7 @@ device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 dataset = load_dataset("DeadPixels/DPhi_Sprint_25_Flowers")
 test_dataset = dataset['test']
-test_dataset.set_transform(transform)
+test_dataset.set_transform(transform_image)
 test_loader = DataLoader(
     test_dataset,
     batch_size=3,
