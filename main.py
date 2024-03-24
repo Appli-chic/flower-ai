@@ -39,7 +39,7 @@ def transform_image(entry):
 
 if __name__ == "__main__":
     # Set GPU
-    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cpu')
 
     # Load data set
     dataset = load_dataset("DeadPixels/DPhi_Sprint_25_Flowers")
@@ -144,4 +144,5 @@ if __name__ == "__main__":
     # Optimize for mobile
     scripted_model = torch.jit.script(le_net)
     optimized_model = torch.utils.mobile_optimizer.optimize_for_mobile(scripted_model)
+    optimized_model._save_for_lite_interpreter('./flower_ai_optimized_lite.ptl')
     torch.jit.save(optimized_model, './flower_ai_optimized.pth')
