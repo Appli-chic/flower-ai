@@ -39,7 +39,7 @@ def transform_image(entry):
 
 if __name__ == "__main__":
     # Set GPU
-    device = torch.device('cpu')
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
     # Load data set
     dataset = load_dataset("DeadPixels/DPhi_Sprint_25_Flowers")
