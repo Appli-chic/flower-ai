@@ -4,22 +4,38 @@ from datasets import load_dataset
 from torch import no_grad
 from torch.nn import CrossEntropyLoss
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, ConcatDataset
 from torchvision import transforms
+from torchvision.datasets import ImageFolder
 from torchvision.transforms import Compose, RandomHorizontalFlip, RandomRotation, RandomVerticalFlip
 from torch.utils.mobile_optimizer import optimize_for_mobile
 
 from le_net import LeNet
 
+classes = {
+    0: "daisy",
+    1: "dandelion",
+    2: "rose",
+    3: "sunflower",
+    4: "tulip",
+}
 
-def get_labels(dataset):
-    labels = []
-    for index in range(len(dataset)):
-        label = dataset[index]['label']
-        if label not in labels:
-            labels.append(label)
 
-    return labels
+class CustomImageFolder(ImageFolder):
+    def __getitem__(self, index):
+        img, label = super().__getitem__(index)
+        return {'image': img, 'label': label}
+
+
+def transform_image_from_extra_database(entry):
+    transformer = Compose(
+        [
+            transforms.Resize((192, 192)),
+            transforms.ToTensor(),
+        ]
+    )
+    entry['image'] = [transformer(img) for img in entry[0]]
+    return entry
 
 
 def transform_image(entry):
@@ -30,7 +46,7 @@ def transform_image(entry):
             RandomVerticalFlip(),
             RandomRotation(10),
             transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            # transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ]
     )
     entry['image'] = [transformer(img) for img in entry['image']]
@@ -44,27 +60,21 @@ if __name__ == "__main__":
     # Load data set
     dataset = load_dataset("DeadPixels/DPhi_Sprint_25_Flowers")
 
-    train_dataset = dataset['train']
+    # Extra dataset built
+    additional_dataset = CustomImageFolder(
+        'flowers',
+        transform=transforms.Compose(
+            [
+                transforms.Resize((192, 192)),
+                transforms.ToTensor(),
+            ]
+        )
+    )
+
+    train_dataset_from_huggingface = dataset['train']
     validation_dataset = dataset['validation']
-    labels = get_labels(train_dataset)
 
-    train_dataset.set_transform(transform_image)
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=3,
-        shuffle=True,
-        num_workers=12,
-    )
-
-    validation_dataset.set_transform(transform_image)
-    validation_loader = DataLoader(
-        validation_dataset,
-        batch_size=3,
-        shuffle=True,
-        num_workers=12,
-    )
-
-    le_net = LeNet(classes=len(labels))
+    le_net = LeNet(classes=5)
     le_net.to(device)
 
     # Optimizer
@@ -81,6 +91,24 @@ if __name__ == "__main__":
 
     # loop over the dataset multiple times
     for epoch in range(1000):
+
+        train_dataset_from_huggingface.set_transform(transform_image)
+        train_dataset = ConcatDataset([train_dataset_from_huggingface, additional_dataset])
+
+        train_loader = DataLoader(
+            train_dataset,
+            batch_size=3,
+            shuffle=True,
+            num_workers=12,
+        )
+
+        validation_dataset.set_transform(transform_image)
+        validation_loader = DataLoader(
+            validation_dataset,
+            batch_size=3,
+            shuffle=True,
+            num_workers=12,
+        )
 
         running_loss = 0.0
         for i, data in enumerate(train_loader, 0):
