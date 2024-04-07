@@ -10,7 +10,7 @@ from torchvision.datasets import ImageFolder
 from torchvision.transforms import Compose, RandomHorizontalFlip, RandomRotation, RandomVerticalFlip
 from torch.utils.mobile_optimizer import optimize_for_mobile
 
-from le_net import LeNet
+from res_net import ResNet
 
 classes = {
     0: "daisy",
@@ -46,7 +46,7 @@ def transform_image(entry):
             RandomVerticalFlip(),
             RandomRotation(10),
             transforms.ToTensor(),
-            # transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ]
     )
     entry['image'] = [transformer(img) for img in entry['image']]
@@ -61,42 +61,43 @@ if __name__ == "__main__":
     dataset = load_dataset("DeadPixels/DPhi_Sprint_25_Flowers")
 
     # Extra dataset built
-    additional_dataset = CustomImageFolder(
-        'flowers',
-        transform=transforms.Compose(
-            [
-                transforms.Resize((192, 192)),
-                transforms.ToTensor(),
-            ]
-        )
-    )
+    # additional_dataset = CustomImageFolder(
+    #     'flowers',
+    #     transform=transforms.Compose(
+    #         [
+    #             transforms.Resize((192, 192)),
+    #             transforms.ToTensor(),
+    #         ]
+    #     )
+    # )
 
     train_dataset_from_huggingface = dataset['train']
     validation_dataset = dataset['validation']
 
-    le_net = LeNet(classes=5)
-    le_net.to(device)
+    model = ResNet(classes=5)
+    model.to(device)
 
     # Optimizer
     criterion = CrossEntropyLoss()
-    optimizer = optim.SGD(le_net.parameters(), lr=0.001, momentum=0.9)
+    optimizer = optim.SGD(model.parameters(), lr=0.0005)
 
     # Scheduler for learning rate reduction
     scheduler = ReduceLROnPlateau(optimizer, 'min')
 
     # Early stopping initialization
     min_val_loss = float('inf')
-    patience = 50
+    patience = 5
     patience_counter = 0
 
     # loop over the dataset multiple times
     for epoch in range(1000):
 
         train_dataset_from_huggingface.set_transform(transform_image)
-        train_dataset = ConcatDataset([train_dataset_from_huggingface, additional_dataset])
+        train_dataset = ConcatDataset([train_dataset_from_huggingface])
+        # train_dataset = ConcatDataset([train_dataset_from_huggingface, additional_dataset])
 
         train_loader = DataLoader(
-            train_dataset,
+            train_dataset_from_huggingface,
             batch_size=3,
             shuffle=True,
             num_workers=12,
@@ -120,7 +121,7 @@ if __name__ == "__main__":
             optimizer.zero_grad()
 
             # forward + backward + optimize
-            outputs = le_net(inputs)
+            outputs = model(inputs)
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
@@ -139,7 +140,7 @@ if __name__ == "__main__":
             for data in validation_loader:
                 images = data['image'].to(device)
                 labels = data['label'].to(device)
-                outputs = le_net(images)
+                outputs = model(images)
                 loss = criterion(outputs, labels)
                 val_loss += loss.item()
                 _, predicted = torch.max(outputs.data, 1)
@@ -167,10 +168,10 @@ if __name__ == "__main__":
     print('Finished Training')
 
     # Save the model
-    torch.save(le_net.state_dict(), './flower_ai.pth')
+    torch.save(model.state_dict(), './flower_ai.pth')
 
     # Optimize for mobile
-    scripted_model = torch.jit.script(le_net)
+    scripted_model = torch.jit.script(model)
     optimized_model = torch.utils.mobile_optimizer.optimize_for_mobile(scripted_model)
     optimized_model._save_for_lite_interpreter('./flower_ai_optimized_lite.ptl')
     torch.jit.save(optimized_model, './flower_ai_optimized.pth')
