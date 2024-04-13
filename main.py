@@ -86,7 +86,7 @@ if __name__ == "__main__":
 
     # Early stopping initialization
     min_val_loss = float('inf')
-    patience = 5
+    patience = 15
     patience_counter = 0
 
     # loop over the dataset multiple times
